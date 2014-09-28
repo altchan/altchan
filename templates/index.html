@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Main Page</title>
+</head>
+<body>
+Select a board:<br/>
+{% for board in boards %}
+	<a href = '/boards/{{ board.tag }}/'>{{ board.name }}</a><br/>
+{% endfor %}
+</body>
+</html>
