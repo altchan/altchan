@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>/{{ board.tag }}/ - {{ board.name }}</title>
+</head>
+<body>
+{% include 'submit_form.html' %}
+<hr>
+{% for thread in threads %}
+	<div id = '{{ thread.id }}'>
+		{% for post in thread.posts %}
+			{{ post.content }}<br/>
+		{% endfor %}
+	</div>
+	<hr>
+{% endfor %}
+</body>
+</html>

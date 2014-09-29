@@ -50,7 +50,7 @@ class Thread(db.Model):
     __tablename__ = 'threads'
     id = db.Column(db.Integer, primary_key=True)
     board_id = db.Column(db.Integer, db.ForeignKey('boards.id'))
-    timestamp = db.Column(db.String(64))
+    timestamp = db.Column(db.DateTime)
     
     board = db.relationship('Board', backref='boards')
     
@@ -65,7 +65,7 @@ class Post(db.Model):
                           primary_key=True)
     content = db.Column(db.String(10000))
     filename = db.Column(db.String(64))
-    timestamp = db.Column(db.String(64))
+    timestamp = db.Column(db.DateTime)
     
     thread = db.relationship('Thread', backref='posts')
     
@@ -77,13 +77,26 @@ class Post(db.Model):
 
 # Read-only URL trees
 
-@app.route('/boards/<board>/', methods=['GET'])
-def board(board):
-    return 'Visiting board {}'.format(board)
+@app.route('/boards/<board_tag>/', methods=['GET'])
+def board(board_tag):
+    # Retrieve information on the board based on the tag.
+    board = Board.query.filter_by(tag=board_tag).first()
+    
+    #Get the threads for that board.
+    threads = Thread.query.filter_by(board_id=board.id).all()
+    
+    # For each thread, get its posts.
+    try:
+        for thread in threads:
+            thread.posts = Post.query.filter_by(thread_id=thread.id).all()
+    except Exception as e:
+        print(e)
+    
+    return render_template('board.html', board=board, threads=threads)
 
-@app.route('/boards/<board>/<thread>/', methods=['GET'])
-def thread(board, thread):
-    return 'Visiting thread {} on board {}'.format(thread, board)
+@app.route('/boards/<board_tag>/<thread>/', methods=['GET'])
+def thread(board_tag, thread):
+    return 'Visiting thread {} on board {}'.format(thread, board_tag)
 
 # Write-only URL trees
 
@@ -99,6 +112,7 @@ def submit_post(board, thread):
 def root():
     boards = Board.query.all()
     return render_template('index.html', boards=boards)
+    db.session.add(None)
 
 # Run the app
 
