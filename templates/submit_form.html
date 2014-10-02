@@ -1,2 +1,12 @@
 
-TODO: submission form<br/><br/>
+<form id = 'create'
+		action = '/submit/{{ board.tag }}/'
+		method = 'POST'
+		enctype = 'multipart/form-data'>
+	Subject: <input type = 'text' name = 'subject'/><br/>
+	Email: <input type = 'text' name = 'email'/><br/>
+	Name: <input type = 'text' name = 'name'/><br/>
+	Message: <textarea rows = '10' cols = '30' name = 'message'></textarea><br/>
+	File: <input type = 'file' name = 'upload'/><br/>
+	<input type = 'submit' name = 'submit' value = 'Create Thread'/>
+</form>
