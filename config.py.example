@@ -1,0 +1,24 @@
+
+# Copy the contents of this file to a file named config.py and insert all of
+# your data in the fields.
+# A good way of generating a random secret key is to do the following in a
+# Python script or on the Python REPL:
+# import os
+# print(''.join(x.encode('hex') for x in os.urandom(24)))
+
+CONFIG = {
+    'database': {
+        'host': 'localhost',
+        'port': 5432,
+        'username': 'your database username here',
+        'password': 'your database password here',
+        'database': 'the name of the database that contains Altchan data'
+    },
+    'default_name': 'Anonymous',
+    'max_email_length': 30,
+    'max_name_length': 30,
+    'max_subject_length': 60,
+    'file_directory': 'images/',
+    'file_extensions': ['jpg', 'jpeg', 'png', 'gif'], # case insensitive
+    'secret_key': 'your secret key here'
+}

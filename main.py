@@ -1,32 +1,24 @@
 
 # Flask imports
-from flask import Flask
-from flask import request
+from flask import Flask, flash, redirect, request
 from flask.templating import render_template
 from flask_sqlalchemy import SQLAlchemy
+
+# Project imports
+from config import CONFIG
 
 # Standard library imports
 import datetime
 import json
 import random
 
-# A few configuarion variables
-DBCREDS_FILENAME = 'dbcreds.json'
-DEFAULT_NAME = 'Anonymous'
-MAX_EMAIL_LENGTH = 30
-MAX_NAME_LENGTH = 30
-MAX_SUBJECT_LENGTH = 60
-FILE_DIRECTORY = 'images/'
-FILE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif']
-
 app = Flask(__name__)
+app.secret_key = CONFIG['secret_key']
 
 # Database information
 
-def create_db_string(filename):
-    with open('dbcreds.json', 'r') as dbcredsfile:
-        dbcreds = json.load(dbcredsfile)
-    
+def create_db_string():
+    dbcreds = CONFIG['database']
     required_fields = ['host', 'port', 'username', 'password', 'database']
     
     for field in required_fields:
@@ -34,15 +26,16 @@ def create_db_string(filename):
             raise ValueError('Error: {} is required in the py \
                     configuration'.format(field))
     
-    db_string = 'postgresql://{}:{}@{}:{}/{}'.format(dbcreds['username'],
-                                                     dbcreds['password'],
-                                                     dbcreds['host'],
-                                                     dbcreds['port'],
-                                                     dbcreds['database'])
+    db_string = 'postgresql://{}:{}@{}:{}/{}'.format(
+         dbcreds['username'],
+         dbcreds['password'],
+         dbcreds['host'],
+         dbcreds['port'],
+         dbcreds['database'])
     
     return db_string
 
-app.config['SQLALCHEMY_DATABASE_URI'] = create_db_string(DBCREDS_FILENAME)
+app.config['SQLALCHEMY_DATABASE_URI'] = create_db_string()
 
 db = SQLAlchemy(app)
 
@@ -62,7 +55,7 @@ class Thread(db.Model):
     __tablename__ = 'threads'
     id = db.Column(db.Integer, primary_key=True)
     board_id = db.Column(db.Integer, db.ForeignKey('boards.id'))
-    subject = db.Column(db.String(MAX_SUBJECT_LENGTH))
+    subject = db.Column(db.String(CONFIG['max_subject_length']))
     timestamp = db.Column(db.DateTime)
     
     board = db.relationship('Board', backref='boards')
@@ -77,10 +70,10 @@ class Post(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     thread_id = db.Column(db.Integer, db.ForeignKey('threads.id'),
                           primary_key=True)
-    name = db.Column(db.String(MAX_NAME_LENGTH))
+    name = db.Column(db.String(CONFIG['max_name_length']))
     content = db.Column(db.String(10000))
     filename = db.Column(db.String(64))
-    email = db.Column(db.String(MAX_EMAIL_LENGTH))
+    email = db.Column(db.String(CONFIG['max_email_length']))
     timestamp = db.Column(db.DateTime)
     
     thread = db.relationship('Thread', backref='posts')
@@ -123,35 +116,48 @@ def submit_thread(board):
     # Check to make sure that all of the required fields are provided. Some of
     # them can be absent, since they have default values. Also trim fields if
     # they exceed their maximum length.
-    subject = request.form['subject'][:MAX_SUBJECT_LENGTH] \
+    subject = request.form['subject'][:CONFIG['max_subject_length']] \
         if 'subject' in request.form else ''
-    email = request.form['email'][:MAX_EMAIL_LENGTH] \
+    email = request.form['email'][:CONFIG['max_email_length']] \
         if 'email' in request.form else ''
-    name = request.form['name'][:MAX_NAME_LENGTH] \
-        if 'name' in request.form else DEFAULT_NAME
+    name = request.form['name'][:CONFIG['max_name_length']] \
+        if 'name' in request.form else CONFIG['default_name']
+    
+    error = False
     
     if 'message' not in request.form or \
         len(request.form['message'].strip()) == 0:
-        return 'You must enter a message'
+        # Don't return yet; if there are more errors, they should be
+        # flashed as well.
+        error = True
+        flash('You must enter a message', 'error')
     
     timestamp = datetime.datetime.now()
     
-    if 'upload' in request.files:
-        # Generate the files new name. For now, this will be the current time
-        # concatenated with a random number in a range big enough to avoid
-        # collision. The extension provided by the user is used, assuming it
-        # is an allowed extension.
-        provided_filename = request.files['upload'].filename
-        extension = provided_filename[provided_filename.rfind('.') + 1:].lower()
-        if extension not in FILE_EXTENSIONS:
-            return 'Extension {} is not allowed'.format(extension)
+    if not 'upload' in request.files or \
+        len(request.files['upload'].filename.strip()) == 0:
+        error = True
+        flash('You must upload a file to start a thread.', 'error')
+    
+    # Generate the files new name. For now, this will be the current time
+    # concatenated with a random number in a range big enough to avoid
+    # collision. The extension provided by the user is used, assuming it
+    # is an allowed extension.
+    provided_filename = request.files['upload'].filename
+    extension = \
+        provided_filename[provided_filename.rfind('.') + 1:].lower()
+    
+    if extension not in CONFIG['file_extensions']:
+        error = True
+        flash('Extension {} is not allowed'.format(extension), 'error')
+    
+    if not error:
         filename = '{}_{}.{}'.format( \
            timestamp.strftime('%Y%m%d%H%M%S'),
            random.getrandbits(32),
            extension)
-        return filename
-    else:
-        return 'You must upload a file to start a thread.'
+    
+    return redirect('/boards/{}/'.format(board))
 
 @app.route('/submit/<board>/<thread>')
 def submit_post(board, thread, methods=['POST']):
