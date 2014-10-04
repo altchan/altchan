@@ -10,10 +10,13 @@ from config import CONFIG
 # Standard library imports
 import datetime
 import json
+import os
 import random
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static')
 app.secret_key = CONFIG['secret_key']
+
+CONFIG['file_directory'] = '/static/' + CONFIG['file_directory']
 
 # Database information
 
@@ -41,9 +44,8 @@ db = SQLAlchemy(app)
 
 class Board(db.Model):
     __tablename__ = 'boards'
-    id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(64))
-    tag = db.Column(db.String(8), unique=True)
+    tag = db.Column(db.String(8), unique=True, primary_key=True)
     nsfw = db.Column(db.Boolean)
     
     def __init__(self, name, tag, nsfw):
@@ -54,16 +56,14 @@ class Board(db.Model):
 class Thread(db.Model):
     __tablename__ = 'threads'
     id = db.Column(db.Integer, primary_key=True)
-    board_id = db.Column(db.Integer, db.ForeignKey('boards.id'))
+    board_tag = db.Column(db.String(8), db.ForeignKey('boards.tag'))
     subject = db.Column(db.String(CONFIG['max_subject_length']))
-    timestamp = db.Column(db.DateTime)
     
     board = db.relationship('Board', backref='boards')
     
-    def __init__(self, board, subject, timestamp):
+    def __init__(self, board, subject):
         self.board = board
         self.subject = subject
-        self.timestamp = timestamp
 
 class Post(db.Model):
     __tablename__ = 'posts'
@@ -71,8 +71,8 @@ class Post(db.Model):
     thread_id = db.Column(db.Integer, db.ForeignKey('threads.id'),
                           primary_key=True)
     name = db.Column(db.String(CONFIG['max_name_length']))
-    content = db.Column(db.String(10000))
-    filename = db.Column(db.String(64))
+    content = db.Column(db.String(CONFIG['max_message_length']))
+    filename = db.Column(db.String(40))
     email = db.Column(db.String(CONFIG['max_email_length']))
     timestamp = db.Column(db.DateTime)
     
@@ -94,7 +94,7 @@ def board(board_tag):
     board = Board.query.filter_by(tag=board_tag).first()
     
     #Get the threads for that board.
-    threads = Thread.query.filter_by(board_id=board.id).all()
+    threads = Thread.query.filter_by(board_tag=board.tag).all()
     
     # For each thread, get its posts.
     try:
@@ -103,7 +103,10 @@ def board(board_tag):
     except Exception as e:
         print(e)
     
-    return render_template('board.html', board=board, threads=threads)
+    try:
+        return render_template('board.html', board=board, threads=threads, config=CONFIG)
+    except Exception as e:
+        print(e)
 
 @app.route('/boards/<board_tag>/<thread>/', methods=['GET'])
 def thread(board_tag, thread):
@@ -111,8 +114,8 @@ def thread(board_tag, thread):
 
 # Write-only URL trees
 
-@app.route('/submit/<board>/', methods=['POST'])
-def submit_thread(board):
+@app.route('/submit/<board_tag>/', methods=['POST'])
+def submit_thread(board_tag):
     # Check to make sure that all of the required fields are provided. Some of
     # them can be absent, since they have default values. Also trim fields if
     # they exceed their maximum length.
@@ -131,6 +134,12 @@ def submit_thread(board):
         # flashed as well.
         error = True
         flash('You must enter a message', 'error')
+    elif len(request.form['message']) > CONFIG['max_message_length']:
+        error = True
+        flash('Your message was too long (maximum {})'.format( \
+           CONFIG['max_message_length']))
+    else:
+        message = request.form['message']
     
     timestamp = datetime.datetime.now()
     
@@ -138,26 +147,38 @@ def submit_thread(board):
         len(request.files['upload'].filename.strip()) == 0:
         error = True
         flash('You must upload a file to start a thread.', 'error')
-    
-    # Generate the files new name. For now, this will be the current time
-    # concatenated with a random number in a range big enough to avoid
-    # collision. The extension provided by the user is used, assuming it
-    # is an allowed extension.
-    provided_filename = request.files['upload'].filename
-    extension = \
-        provided_filename[provided_filename.rfind('.') + 1:].lower()
-    
-    if extension not in CONFIG['file_extensions']:
-        error = True
-        flash('Extension {} is not allowed'.format(extension), 'error')
+    else:
+        # Generate the files new name. For now, this will be the current time
+        # concatenated with a random number in a range big enough to avoid
+        # collision. The extension provided by the user is used, assuming it
+        # is an allowed extension.
+        provided_filename = request.files['upload'].filename
+        extension = \
+            provided_filename[provided_filename.rfind('.') + 1:].lower()
+        
+        if extension not in CONFIG['file_extensions']:
+            flash('Extension {} is not allowed'.format(extension), 'error')
     
     if not error:
         filename = '{}_{}.{}'.format( \
            timestamp.strftime('%Y%m%d%H%M%S'),
            random.getrandbits(32),
            extension)
+        # Get the associated board
+        board = Board.query.filter_by(tag=board_tag).first()
+        
+        if board is None:
+            flash('Board {} does not exist'.format(board_tag))
+        else:
+            thread = Thread(board, subject)
+            post = Post(thread, name, message, filename, email, timestamp)
+            request.files['upload'].save( \
+                os.path.join(CONFIG['file_directory'][1:], filename))
+            db.session.add(thread)
+            db.session.add(post)
+            db.session.commit()
     
-    return redirect('/boards/{}/'.format(board))
+    return redirect('/boards/{}/'.format(board_tag))
 
 @app.route('/submit/<board>/<thread>')
 def submit_post(board, thread, methods=['POST']):
@@ -167,7 +188,6 @@ def submit_post(board, thread, methods=['POST']):
 def root():
     boards = Board.query.all()
     return render_template('index.html', boards=boards)
-    db.session.add(None)
 
 # Run the app
 

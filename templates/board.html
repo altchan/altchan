@@ -20,6 +20,21 @@
 {% for thread in threads %}
 	<div id = '{{ thread.id }}'>
 		{% for post in thread.posts %}
+			{% if post.name %}
+				{{ post.name }}
+			{% else %}
+				{{ config['default_name'] }}
+			{% endif %}
+			{% if post.email %}
+				({{ post.email}})
+			{% endif %}
+			at {{ post.timestamp }}:<br/>
+			{% if post.subject %}
+				{{ post.subject }}<br/>
+			{% endif %}
+			{% if post.filename %}
+				<img src = '{{ config["file_directory"] }}{{ post.filename }}'/><br/>
+			{% endif %}
 			{{ post.content }}<br/>
 		{% endfor %}
 	</div>

@@ -21,7 +21,7 @@ def main():
     if len(sys.argv) > 1 and sys.argv[1] == 'd':
         # Entering some sample data
         b = Board('Random', 'b', True)
-        b_thread1 = Thread(b, 'A Subject', datetime.datetime.now())
+        b_thread1 = Thread(b, 'A Subject')
         b_thread1_post1 = Post(b_thread1, 'Person 1', 'First post content', None,
                                'first@email.com', datetime.datetime.now())
         b_thread1_post2 = Post(b_thread1, 'Person 2', 'Second post content', None,
@@ -38,7 +38,6 @@ def main():
         db.session.add(b_thread1_post3) #@UndefinedVariable
         
         db.session.commit() #@UndefinedVariable
-        
     
     print('The database has been set up.')
 

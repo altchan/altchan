@@ -18,7 +18,7 @@ CONFIG = {
     'max_email_length': 30,
     'max_name_length': 30,
     'max_subject_length': 60,
-    'file_directory': 'images/',
+    'file_directory': 'images/', # Must end in a forward slash
     'file_extensions': ['jpg', 'jpeg', 'png', 'gif'], # case insensitive
     'secret_key': 'your secret key here'
 }
